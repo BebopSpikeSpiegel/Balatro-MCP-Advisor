@@ -1,291 +1,102 @@
-# Balatro MCP Server (NOT COMPLETE)
+# Balatro MCP Advisor
 
-An MCP (Model Context Protocol) server that allows Claude to analyze and recommend moves for the game Balatro by reading exported game state data.
+An **in-game AI advisor** for [Balatro](https://www.playbalatro.com/). Click a mouse
+side button while you play and a panel is drawn **on top of the game** with Claude's
+suggestion for whatever decision is on screen — which cards to play or discard, what to
+buy in the shop, which booster-pack card to take, whether to play or skip a blind — in
+**your game's language**.
 
-## Overview
+It runs on **Claude Code** (your Claude Max/Pro login) in headless mode, so there is **no
+API key and no per-request billing**.
 
-This project consists of three components:
-1. **Lua Mod** (`main.lua`) - Exports Balatro game state to JSON (press F1 in-game)
-2. **Python MCP Server** (`balatro_mcp_server.py`) - Reads the JSON and provides tools to Claude
-3. **Claude Desktop Integration** - Allows Claude to analyze your Balatro games
+> Forked from [AbdelrahmanElmughrabi/Balatro-MCP-Server](https://github.com/AbdelrahmanElmughrabi/Balatro-MCP-Server).
+> The upstream project exported game state to JSON for Claude Desktop to read on demand.
+> This fork pivots it into a real-time, on-screen advisor. The original `balatro_mcp_server.py`
+> / `main.py` are kept for reference; the advisor does not use them.
 
-## Prerequisites
+## How it works
 
-- **Balatro** with [Steamodded](https://github.com/Steamopollys/Steamodded) mod loader installed
+```
+Balatro (fullscreen)
+  └─ Overlay mod (Lua, in-process, via Steamodded):
+        • detects the current decision (Balatro's G.STATE machine)
+        • exports game state -> mcp-bridge/mcp_gamestate.json
+        • draws the suggestion panel on top of the game
+        • polls mcp-bridge/mcp_suggestion.json for the answer
+              ▲ writes            │ reads
+              │                   ▼
+  Brain (mcp_brain.py, background):
+        • watches the state file
+        • calls `claude -p` (headless Claude Code = your Max/Pro login)
+        • writes a short, localized suggestion back
+```
+
+The game and the brain talk only through two small JSON files, so the game never blocks
+on the network.
+
+## What it advises on
+
+Driven by Balatro's state machine, so it covers every decision screen (with a generic
+fallback for anything unmapped):
+
+| Situation | Advice |
+| --- | --- |
+| Playing a blind | which cards to play / discard, use a consumable, aware of the boss debuff |
+| Shop | what to buy / skip, reroll or save, economy/interest |
+| Booster pack | which card(s) to take (up to the pack's pick count), or skip |
+| Blind select | play vs. skip, weighing the skip tag and boss effect |
+| Using a consumable | which tarot/planet/spectral to use and on what |
+
+## Requirements
+
+- **Balatro** (Steam version) with **[Lovely injector](https://github.com/ethangreen-dev/lovely-injector)**
+  + **[Steamodded](https://github.com/Steamodded/smods)** installed
+- **[Claude Code](https://claude.com/claude-code)** CLI, logged in (Max or Pro)
 - **Python 3.11+**
-- **Claude Desktop** application
-- **Windows** (instructions are Windows-specific, but adaptable to other OS)
+- Windows (paths below are Windows; adaptable elsewhere)
 
-## Installation
+## Install
 
-### 1. Set Up the Lua Mod
-
-1. Copy the `main.lua` file from this repository to:
-```
-%AppData%\Balatro\Mods\mcp-bridge\main.lua
-```
-
-2. Restart Balatro to load the mod
-
-3. Verify the mod is loaded (you should see the message in console)
-
-**What it does:** 
-- Hooks into the F1 key
-- Exports current game state to JSON
-- Saves to: `%AppData%\Balatro\mcp-bridge\mcp_gamestate.json`
-
-### 2. Set Up the Python MCP Server
-
-1. **Clone or download this repository**
-
-2. **Create a virtual environment:**
-```bash
-cd Balatro-MCP-Server
-python -m venv .venv
-```
-
-3. **Activate the virtual environment:**
-```bash
-# Windows
-.venv\Scripts\activate
-
-# Linux/Mac
-source .venv/bin/activate
-```
-
-4. **Install dependencies:**
-```bash
-pip install mcp
-```
-
-5. **The `balatro_mcp_server.py` file is already in the repository** - no need to create it
-
-**Key features of the server:**
-- Automatically handles Windows encoding issues
-- Provides `read_game_state` tool to fetch game data
-- Provides `get_hand_analysis` tool to analyze poker hands
-
-### 3. Configure Claude Desktop
-
-1. **Locate your Claude Desktop config file:**
-```
-%APPDATA%\Claude\claude_desktop_config.json
-```
-
-2. **Edit the config file** (create it if it doesn't exist) and add your server:
-
-```json
-{
-  "mcpServers": {
-    "balatro-agent": {
-      "type": "stdio",
-      "command": "C:\\Users\\YOUR_USERNAME\\Path\\To\\.venv/Scripts/python.exe",
-      "args": [
-        "C:\\Users\\YOUR_USERNAME\\Path\\To\\Balatro-MCP-Server\\balatro_mcp_server.py"
-      ]
-    }
-  }
-}
-```
-
-**Important:**
-- Replace `YOUR_USERNAME` and the path with your actual absolute path to `balatro_mcp_server.py`
-- Use double backslashes `\\` in Windows paths
-- The `-u` flag enables unbuffered Python output
-- If you have other MCP servers, add this as another entry in the `mcpServers` object
-
-3. **Restart Claude Desktop completely**
-   - Quit Claude Desktop
-   - Check Task Manager to ensure it's fully closed
-   - Restart Claude Desktop
-
-## Usage
-
-1. **Launch Balatro** with the mod enabled
-2. **Start a game** and navigate to any point where you have cards
-3. **Press F1** to export the current game state
-   - You should see a console message: `[MCP Bridge] ✓ Exported: X cards, Y jokers`
-4. **Open Claude Desktop** and start a conversation
-5. **Ask Claude** to read your game state:
+1. **Install Lovely + Steamodded** (see their repos). Confirm Steamodded loads in-game.
+2. **Install the overlay mod** — copy the `mod/mcp-bridge/` folder to:
    ```
-   Can you read my current Balatro game state?
+   %APPDATA%\Balatro\Mods\mcp-bridge\
+   ```
+   (contains `main.lua` + `mcp_bridge.json`). Restart Balatro; you should see
+   `[MCP Advisor] Loaded` in the console and "MCP Advisor" in the mods list.
+3. **Set up Python** (only needed for the optional legacy MCP server; the advisor brain
+   itself uses just the standard library):
+   ```
+   python -m venv .venv
+   .venv\Scripts\pip install mcp
    ```
 
-Claude will automatically use the `read_game_state` tool to fetch your game data!
+## Use
 
-## Available Tools
+1. Launch Balatro (fullscreen is fine).
+2. Start the brain: double-click **`start_advisor.bat`** (leave it open while you play).
+3. In-game, **click a mouse side button** (button 4/5) for advice on the current spot.
+   The panel shows "Analyzing…", then the suggestion (~10s).
 
-### `read_game_state`
-Reads the exported JSON file and returns:
-- 💰 Cash, hands left, discards left
-- 📊 Current ante/round and blind information
-- 🃏 All cards in your hand (with enhancements, editions, seals)
-- 🎭 All jokers (with editions)
-- 🎴 Deck size
-- Raw JSON data for debugging
+## Configuration
 
-### `get_hand_analysis`
-Analyzes your current hand and identifies possible poker hands:
-- Pairs, two pairs, three of a kind, four of a kind
-- Full house
-- Flush
-- Suit and rank distributions
+`mcp_brain.py` (top of file):
+- `MODEL` — `haiku` (fast) / `sonnet` (default) / `opus` (smartest)
 
-## Example Interaction
+`main.lua` (`mcpb` config block):
+- `analyze_buttons` — which mouse buttons trigger analysis (default 4 and 5)
+- `font_size`, `panel_w`, `panel_x`, `panel_y` — overlay size/position
 
-```
-You: Read my Balatro game state
-
-Claude: I'll check your current Balatro game state.
-[Uses read_game_state tool]
-
-=== Balatro Game State ===
-
-💰 Cash: $12
-🎴 Hands Left: 3
-🗑️ Discards Left: 2
-
-📊 Ante: 2 | Round: 1
-🎯 Chips to Beat: 450
-👁️ Current Blind: Big Blind
-
-🃏 Current Hand (8 cards):
-  • King of Hearts
-  • King of Diamonds
-  • 7 of Spades
-  • 3 of Clubs
-  • Ace of Hearts (Enhancement: m_steel)
-  ...
-
-You: What's the best play here?
-
-Claude: Looking at your hand, you have a pair of Kings which is solid...
-[Claude analyzes and suggests moves]
-```
-
-## Troubleshooting
-
-### "Game state file not found"
-- Make sure you pressed **F1** in Balatro to export the state
-- Check that the file exists at: `%APPDATA%\Balatro\mcp-bridge\mcp_gamestate.json`
-- Verify the Lua mod is loaded in Balatro's mod menu
-- Check Balatro console for `[MCP Bridge] Loaded` message
-
-### MCP Server Won't Connect to Claude
-- Ensure Python 3.11+ is installed: `python --version`
-- Verify the path in `claude_desktop_config.json` is correct and absolute
-- Use double backslashes `\\` in Windows paths
-- Completely restart Claude Desktop (quit from Task Manager if needed)
-- Check Claude's logs: **Help → Developer Tools → Console**
-- Try running the server manually to test: `python balatro_mcp_server.py`
-
-### Server Crashes on Startup
-- Ensure the encoding fixes are in `balatro_mcp_server.py` (Windows-specific)
-- Check that `PYTHONIOENCODING=utf-8` is in your Claude config
-- Look for error messages in Claude's Developer Console
-
-### F1 Key Not Working in Balatro
-- Verify Steamodded is properly installed
-- Check if another mod is conflicting with the F1 key
-- Look for error messages in Balatro's console
-
-## Project Structure
-
-```
-Balatro-MCP-Server/
-├── balatro_mcp_server.py      # MCP server (main file)
-├── main.lua                    # Lua mod for Balatro
-├── .venv/                      # Python virtual environment (created during setup)
-├── README.md                   # This file
-└── .gitignore
-
-%APPDATA%/Balatro/
-├── Mods/
-│   └── mcp-bridge/
-│       └── main.lua            # Copy the Lua mod here
-└── mcp-bridge/
-    └── mcp_gamestate.json      # Auto-generated when you press F1
-
-%APPDATA%/Claude/
-└── claude_desktop_config.json  # Claude MCP configuration
-```
-
-## How It Works
-
-1. **Game State Export**: The Lua mod hooks into Balatro's game loop and watches for F1 keypress
-2. **JSON Export**: When F1 is pressed, it serializes the current game state to JSON
-3. **MCP Server**: Python server monitors the JSON file and provides it to Claude via MCP protocol
-4. **Claude Integration**: Claude reads the tools and can call them to analyze your game
-
-## Development
-
-### Testing the Server Standalone
-```bash
-```bash
-python balatro_mcp_server.py
-```
-The server should start and wait for input. Press Ctrl+C to stop.
-
-### Viewing Debug Logs
-All server logs are written to stderr and appear in Claude's Developer Console:
-- `[BALATRO] Starting...` - Server initializing
-- `[BALATRO] list_tools called` - Claude querying available tools
-- `[BALATRO] call_tool invoked: read_game_state` - Tool being executed
-
-### Modifying the Lua Export
-Edit `main.lua` to export additional game state:
-- Consumables (tarot cards, planet cards, etc.)
-- Shop contents
-- Vouchers
-- Deck modifications
-
-## Future Enhancements (might)
-
-- [ ] **Scoring simulation**: Calculate exact chip values for different plays
-- [ ] **Move recommendations**: Suggest optimal discards and plays based on jokers
-- [ ] **Joker synergy analysis**: Identify powerful joker combinations
-- [ ] **Deck state tracking**: Monitor consumables, vouchers, and shop items
-- [ ] **Probability calculations**: Assess likelihood of drawing needed cards
-- [ ] **Win condition analysis**: Calculate if current hand can beat the blind
-
-## Contributing
-
-Contributions are welcome! Some areas that need work:
-- Straight detection in poker hand analysis
-- Support for special Balatro hands (Flush Five, Flush House, etc.)
-- Better joker effect simulation
-- Real-time scoring calculations
-
-## Technical Details
-
-### Why MCP?
-The Model Context Protocol allows Claude to access real-time data through standardized tools. This is better than:
-- Pasting JSON manually (tedious)
-- Screen scraping (unreliable)
-- REST APIs (requires always-on server)
-
-### Windows-Specific Fixes
-The Python server includes critical Windows encoding fixes:
-- UTF-8 encoding for stdin/stdout/stderr
-- `PYTHONIOENCODING` environment variable
-- Unbuffered output with `-u` flag
-
-Without these, the MCP server crashes with `UnicodeDecodeError` on Windows.
+The advice language follows Balatro's language setting automatically.
 
 ## Credits
-- Requires [Steamodded](https://github.com/Steamopollys/Steamodded) mod loader
 
-## Support
+- Upstream: [AbdelrahmanElmughrabi/Balatro-MCP-Server](https://github.com/AbdelrahmanElmughrabi/Balatro-MCP-Server)
+- [Steamodded](https://github.com/Steamodded/smods) and
+  [Lovely injector](https://github.com/ethangreen-dev/lovely-injector)
 
-If you encounter issues:
-1. Check the Troubleshooting section above
-2. Verify all paths are correct in your config
-3. Look for errors in Claude's Developer Console
-4. Test the server manually with `python balatro_mcp_server.py`
-5. Open an issue on GitHub with error logs
+## License
 
----
-## Extra info
-Will add more features in the future
-
-**Happy Balatro playing! 🃏🎰**
+[MIT](LICENSE) © 2026 BebopSpikeSpiegel. Covers the advisor additions in this fork
+(`main.lua`, `mcp_brain.py`, the mod, launcher). Upstream files remain the original
+author's work.

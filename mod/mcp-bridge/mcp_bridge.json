@@ -1,0 +1,10 @@
+{
+    "id": "mcp_bridge",
+    "name": "MCP Advisor",
+    "author": ["Balatro-MCP-Server"],
+    "description": "Click a mouse side button to get AI suggestions for the current spot, drawn as an in-game overlay.",
+    "prefix": "mcpb",
+    "main_file": "main.lua",
+    "priority": 0,
+    "version": "0.2.0"
+}
