@@ -33,6 +33,7 @@ APPDATA = os.getenv("APPDATA")
 BASE = Path(APPDATA) / "Balatro" / "mcp-bridge"
 STATE_PATH = BASE / "mcp_gamestate.json"
 SUGGEST_PATH = BASE / "mcp_suggestion.json"
+LOG_PATH = BASE / "advice_log.jsonl"   # append-only history, for reviewing advice quality
 
 SYSTEM = (
     "You are a Balatro strategy assistant giving fast in-game advice. "
@@ -204,6 +205,18 @@ def main():
                     advice = ask_claude(data)
                     dt = time.time() - t0
                     SUGGEST_PATH.write_text(f"{rid}\n{advice}", encoding="utf-8")
+                    try:
+                        with LOG_PATH.open("a", encoding="utf-8") as lf:
+                            lf.write(json.dumps({
+                                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "request_id": rid, "model": MODEL,
+                                "seconds": round(dt, 1),
+                                "context": data.get("context"),
+                                "language": data.get("language"),
+                                "advice": advice, "state": data,
+                            }, ensure_ascii=False) + "\n")
+                    except Exception as e:
+                        print(f"    ! log write failed: {e}")
                     print(f"    answered in {dt:.1f}s: {advice[:80]}"
                           + ("..." if len(advice) > 80 else ""))
             time.sleep(POLL_SECONDS)
