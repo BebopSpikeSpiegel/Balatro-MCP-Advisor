@@ -21,7 +21,7 @@ from pathlib import Path
 # ------------------------------- config -------------------------------
 MODEL = "opus"          # "haiku" (fast) | "sonnet" (balanced) | "opus" (smartest)
 POLL_SECONDS = 0.3        # how often to check for a new request
-CLAUDE_TIMEOUT = 90       # seconds to wait for Claude per request
+CLAUDE_TIMEOUT = 150      # seconds to wait for Claude per request (opus tail latency)
 MAX_WORDS_HINT = 55       # keep advice short enough for the overlay
 
 # Locate the claude executable (explicit path first, then PATH).

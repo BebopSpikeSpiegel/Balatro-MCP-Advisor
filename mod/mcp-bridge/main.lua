@@ -14,7 +14,7 @@ local mcpb = {
     -- CONFIG ------------------------------------------------------------
     analyze_buttons = { [4] = true, [5] = true }, -- mouse side buttons
     poll_interval   = 0.25,   -- seconds between checks for an answer
-    timeout         = 60,     -- seconds before giving up on the brain
+    timeout         = 90,     -- seconds before showing "slow" (keeps waiting after)
     panel_x         = 20,     -- top-left corner by default
     panel_y         = 20,
     panel_w         = 460,
@@ -382,7 +382,10 @@ local function check_answer()
         rid, body = contents, ''
     end
     rid = (rid or ''):gsub('%s+$', '')
-    if mcpb.pending_id and rid == mcpb.pending_id and mcpb.status == 'thinking' then
+    -- Accept the answer even after the "slow" message showed: a late (e.g. opus)
+    -- reply should still appear on screen rather than being thrown away.
+    if mcpb.pending_id and rid == mcpb.pending_id
+        and (mcpb.status == 'thinking' or mcpb.status == 'timeout') then
         mcpb.status = 'ready'
         mcpb.text = body
         print('[MCP Advisor] Answer received (' .. rid .. ')')
@@ -410,12 +413,14 @@ function love.update(dt)
     mcpb.poll_accum = mcpb.poll_accum + (dt or 0)
     if mcpb.poll_accum >= mcpb.poll_interval then
         mcpb.poll_accum = 0
-        if mcpb.status == 'thinking' then
+        -- Keep polling while thinking OR after the slow-timeout, so a late answer
+        -- still lands (opus can take 60-90s). Only the message changes at timeout.
+        if mcpb.status == 'thinking' or mcpb.status == 'timeout' then
             pcall(check_answer)
             if mcpb.status == 'thinking'
                 and (love.timer.getTime() - mcpb.request_at) > mcpb.timeout then
                 mcpb.status = 'timeout'
-                mcpb.text = 'No answer in time. Is mcp_brain.py running in a terminal?'
+                mcpb.text = 'Still thinking (slow model)... if it never resolves, check mcp_brain.py.'
             end
         end
     end
@@ -457,7 +462,7 @@ local function header_line()
     elseif mcpb.status == 'ready' then
         return 'MCP Advisor  -  Advice'
     elseif mcpb.status == 'timeout' then
-        return 'MCP Advisor  -  No response'
+        return 'MCP Advisor  -  Still thinking'
     else
         return 'MCP Advisor  -  side-click for advice'
     end
