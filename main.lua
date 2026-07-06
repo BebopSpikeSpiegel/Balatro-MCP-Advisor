@@ -250,13 +250,20 @@ local function build_state(request_id)
     local hand = newarray()
     if G.hand and G.hand.cards then
         for _, c in ipairs(G.hand.cards) do
-            hand[#hand + 1] = {
-                rank = (c.base and c.base.value) or '?',
-                suit = (c.base and c.base.suit) or '?',
-                enhancement = get_enhancement(c),
-                edition = get_edition(c),
-                seal = c.seal or 'none',
-            }
+            if c.facing == 'back' then
+                -- Face-down (e.g. The House / The Fish boss): the player can't see
+                -- this card, so don't leak its rank/suit -- let the advisor reason
+                -- blind like a human instead of peeking through the boss effect.
+                hand[#hand + 1] = { hidden = true }
+            else
+                hand[#hand + 1] = {
+                    rank = (c.base and c.base.value) or '?',
+                    suit = (c.base and c.base.suit) or '?',
+                    enhancement = get_enhancement(c),
+                    edition = get_edition(c),
+                    seal = c.seal or 'none',
+                }
+            end
         end
     end
     state.current_hand = hand

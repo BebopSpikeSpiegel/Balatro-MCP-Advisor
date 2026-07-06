@@ -87,7 +87,9 @@ def task_instruction(state: dict) -> str:
         return (
             "The player is playing a blind. Advise which cards to play or discard (respect "
             "run_info.blind_effect if present) and whether to use a consumable now. One brief "
-            "reason."
+            "reason. A card marked hidden:true is FACE-DOWN (a boss blind): you do NOT know its "
+            "rank or suit, so never name or guess it -- reason like a player who cannot see it "
+            "(if the whole hand is hidden, usually just play a hand to see, don't discard blindly)."
         )
     # round_eval / other / unknown -> still give useful advice from the snapshot.
     return (
