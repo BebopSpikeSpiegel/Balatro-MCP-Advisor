@@ -99,6 +99,34 @@ local function get_language()
     return 'en-us'
 end
 
+-- Localized ability text for a joker / consumable / voucher, so the advisor can
+-- reason from the card's REAL mechanics (e.g. "adds the lowest HELD card's rank")
+-- instead of guessing. Strips Balatro's {C:...} colour markup.
+local function center_desc(set, key)
+    local out = nil
+    pcall(function()
+        local descs = G.localization and G.localization.descriptions
+        local d = descs and set and key and descs[set] and descs[set][key]
+        if d and d.text then
+            local s = table.concat(d.text, ' ')
+            s = s:gsub('{[^}]*}', ' '):gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+            if s ~= '' then out = s end
+        end
+    end)
+    return out
+end
+
+-- Which localization set a card's description lives under (nil = no desc).
+local function desc_set(c, key)
+    local s = c and c.ability and c.ability.set
+    if s == 'Joker' or s == 'Tarot' or s == 'Planet' or s == 'Spectral' or s == 'Voucher' then
+        return s
+    end
+    if key and key:sub(1, 2) == 'j_' then return 'Joker' end
+    if key and key:sub(1, 2) == 'v_' then return 'Voucher' end
+    return nil
+end
+
 -- Describe one shop item (joker, playing card, consumable, voucher, or pack).
 local function shop_item(c)
     local item = {}
@@ -112,6 +140,7 @@ local function shop_item(c)
     end
     local ed = get_edition(c);      if ed ~= 'none' then item.edition = ed end
     local enh = get_enhancement(c); if enh ~= 'none' then item.enhancement = enh end
+    local ds = desc_set(c, item.key); if ds then item.desc = center_desc(ds, item.key) end
     return item
 end
 
@@ -157,11 +186,14 @@ local function collect_consumables()
     pcall(function()
         if G.consumeables and G.consumeables.cards then
             for _, c in ipairs(G.consumeables.cards) do
+                local ckey = (c.config and c.config.center and c.config.center.key) or '?'
+                local cset = (c.ability and c.ability.set) or '?'
                 list[#list + 1] = {
                     name = (c.ability and c.ability.name)
                         or (c.config and c.config.center and c.config.center.name) or 'Unknown',
-                    key = (c.config and c.config.center and c.config.center.key) or '?',
-                    set = (c.ability and c.ability.set) or '?',
+                    key = ckey,
+                    set = cset,
+                    desc = center_desc(cset, ckey),
                 }
             end
         end
@@ -270,11 +302,13 @@ local function build_state(request_id)
     local jokers = newarray()
     if G.jokers and G.jokers.cards then
         for _, j in ipairs(G.jokers.cards) do
+            local jkey = (j.config and j.config.center and j.config.center.key) or '?'
             jokers[#jokers + 1] = {
                 name = (j.ability and j.ability.name)
                     or (j.config and j.config.center and j.config.center.name) or 'Unknown',
-                key = (j.config and j.config.center and j.config.center.key) or '?',
+                key = jkey,
                 edition = get_edition(j),
+                desc = center_desc('Joker', jkey),
             }
         end
     end

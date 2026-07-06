@@ -44,7 +44,9 @@ SYSTEM = (
     "Card edition reference (an item's 'edition' field holds the English key on "
     "the left; use the correct name for the advice language and never mix them "
     "up): foil = +50 chips (中文: 闪箔); holo = +10 mult (中文: 全息); "
-    "polychrome = x1.5 mult (中文: 多彩); negative = +1 joker slot (中文: 负片)."
+    "polychrome = x1.5 mult (中文: 多彩); negative = +1 joker slot (中文: 负片). "
+    "Jokers and consumables include a 'desc' field = the card's exact in-game "
+    "effect; base your reasoning on that, not on assumptions about the card."
 )
 
 
@@ -87,7 +89,10 @@ def task_instruction(state: dict) -> str:
         return (
             "The player is playing a blind. Advise which cards to play or discard (respect "
             "run_info.blind_effect if present) and whether to use a consumable now. One brief "
-            "reason. A card marked hidden:true is FACE-DOWN (a boss blind): you do NOT know its "
+            "reason. Exploit each joker's 'desc': jokers that scale off cards still HELD in hand "
+            "(e.g. Raised Fist uses your lowest held card) reward playing or discarding your "
+            "lowest held cards so a higher card sets the bonus. A card marked hidden:true is "
+            "FACE-DOWN (a boss blind): you do NOT know its "
             "rank or suit, so never name or guess it -- reason like a player who cannot see it "
             "(if the whole hand is hidden, usually just play a hand to see, don't discard blindly)."
         )
