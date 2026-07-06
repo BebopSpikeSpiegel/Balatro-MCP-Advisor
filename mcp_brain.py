@@ -40,7 +40,11 @@ SYSTEM = (
     f"actionable advice (at most ~{MAX_WORDS_HINT} words). Plain text only (no "
     "markdown, no emoji, no bullet characters, no headings). Focus on the single "
     "most important decision right now and give one brief reason. "
-    "Do not use any tools; answer directly from the JSON."
+    "Do not use any tools; answer directly from the JSON. "
+    "Card edition reference (an item's 'edition' field holds the English key on "
+    "the left; use the correct name for the advice language and never mix them "
+    "up): foil = +50 chips (中文: 闪箔); holo = +10 mult (中文: 全息); "
+    "polychrome = x1.5 mult (中文: 多彩); negative = +1 joker slot (中文: 负片)."
 )
 
 
