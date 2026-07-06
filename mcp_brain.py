@@ -47,7 +47,17 @@ SYSTEM = (
     "up): foil = +50 chips (中文: 闪箔); holo = +10 mult (中文: 全息); "
     "polychrome = x1.5 mult (中文: 多彩); negative = +1 joker slot (中文: 负片). "
     "Jokers and consumables include a 'desc' field = the card's exact in-game "
-    "effect; base your reasoning on that, not on assumptions about the card."
+    "effect (with real current numbers), and sometimes 'nums'; base your reasoning "
+    "on those, not on assumptions about the card. "
+    "GOAL: help the player BEAT the blind (run_info.chips_to_beat) and win the run. "
+    "Do rough score math: a played poker hand scores about (its base chips from "
+    "'hand_levels' + chips from the scoring cards) x (its base mult from "
+    "'hand_levels'), then each joker applies LEFT TO RIGHT by 'slot'. So additive "
+    "+chips/+mult and retrigger jokers should sit BEFORE x-mult jokers, and x-mult "
+    "jokers score best on the right. Only tell the player to drag/reorder a joker "
+    "when it clearly raises the score. Favor building a multiplicative (x-mult) "
+    "engine; keep cash for interest ($1 per $5 held, up to $25); think one blind "
+    "ahead. 'deck' is the whole-deck composition (counts)."
 )
 
 
@@ -59,7 +69,8 @@ def task_instruction(state: dict) -> str:
         return (
             "The player opened a BOOSTER PACK and must choose cards. See 'booster' "
             "(kind, pick_count = how many they may take, choices). Recommend which specific "
-            "card(s) to take (up to pick_count) and why, given their jokers, hand, and deck. "
+            "card(s) to take (up to pick_count) and why, judged by each choice's real 'desc' "
+            "and its fit with their jokers, 'hand_levels', and 'deck'. "
             "IMPORTANT: if this is a Joker/Buffoon pack and joker_slots.used >= joker_slots.max "
             "(slots FULL), taking a joker forces SELLING one they already own -- name which "
             "existing joker to sell and why (weakest / least synergy), or say skip if none is "
@@ -82,7 +93,9 @@ def task_instruction(state: dict) -> str:
         return (
             "The player is in the SHOP. From 'shop' (jokers_and_cards, vouchers, "
             "booster_packs with 'cost'), their cash and reroll_cost, recommend what to buy or "
-            "skip (name items), and whether to reroll or save. Mind the economy: keep $5+ per "
+            "skip (name items), and whether to reroll or save. Weigh each buy by its real effect "
+            "('desc'/'nums'), your 'hand_levels', and 'deck' fit; prioritize x-mult or scaling "
+            "jokers and planets for the hand you actually play. Mind the economy: keep $5+ per "
             "$5 for interest; don't spend to zero without a strong reason. If joker_slots are "
             "full and you recommend buying a joker, say which owned joker to sell first."
         )
@@ -90,7 +103,9 @@ def task_instruction(state: dict) -> str:
         return (
             "The player is playing a blind. Advise which cards to play or discard (respect "
             "run_info.blind_effect if present) and whether to use a consumable now. One brief "
-            "reason. Exploit each joker's 'desc': jokers that scale off cards still HELD in hand "
+            "reason. Use 'hand_levels' to pick the hand whose chips x mult (after jokers) "
+            "actually clears run_info.chips_to_beat; if none can, give the highest-scoring line "
+            "and say it may fall short. Exploit each joker's 'desc': jokers that scale off cards still HELD in hand "
             "(e.g. Raised Fist uses your lowest held card) reward playing or discarding your "
             "lowest held cards so a higher card sets the bonus. A card marked hidden:true is "
             "FACE-DOWN (a boss blind): you do NOT know its "
