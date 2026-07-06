@@ -274,6 +274,21 @@ local function build_state(request_id)
     state.jokers = jokers
     state.deck_size = (G.deck and G.deck.cards and #G.deck.cards) or 0
 
+    -- Slot capacity: picking up a card when full forces selling/removing one,
+    -- so the advisor can name which to drop instead of ignoring the tradeoff.
+    pcall(function()
+        state.joker_slots = {
+            used = (G.jokers and G.jokers.cards and #G.jokers.cards) or 0,
+            max = (G.jokers and G.jokers.config and G.jokers.config.card_limit) or 5,
+        }
+    end)
+    pcall(function()
+        state.consumable_slots = {
+            used = (G.consumeables and G.consumeables.cards and #G.consumeables.cards) or 0,
+            max = (G.consumeables and G.consumeables.config and G.consumeables.config.card_limit) or 2,
+        }
+    end)
+
     -- What decision is on screen right now (drives extra data + brain advice).
     local context, game_state = resolve_context()
     state.context = context

@@ -57,7 +57,11 @@ def task_instruction(state: dict) -> str:
             "The player opened a BOOSTER PACK and must choose cards. See 'booster' "
             "(kind, pick_count = how many they may take, choices). Recommend which specific "
             "card(s) to take (up to pick_count) and why, given their jokers, hand, and deck. "
-            "If none help, say to skip the pack."
+            "IMPORTANT: if this is a Joker/Buffoon pack and joker_slots.used >= joker_slots.max "
+            "(slots FULL), taking a joker forces SELLING one they already own -- name which "
+            "existing joker to sell and why (weakest / least synergy), or say skip if none is "
+            "worth displacing. Apply the same 'one must go' rule to consumable_slots for "
+            "Tarot/Planet/Spectral packs. If nothing helps, say to skip the pack."
         )
     if ctx == "blind_select":
         return (
@@ -76,7 +80,8 @@ def task_instruction(state: dict) -> str:
             "The player is in the SHOP. From 'shop' (jokers_and_cards, vouchers, "
             "booster_packs with 'cost'), their cash and reroll_cost, recommend what to buy or "
             "skip (name items), and whether to reroll or save. Mind the economy: keep $5+ per "
-            "$5 for interest; don't spend to zero without a strong reason."
+            "$5 for interest; don't spend to zero without a strong reason. If joker_slots are "
+            "full and you recommend buying a joker, say which owned joker to sell first."
         )
     if ctx == "playing_blind":
         return (
