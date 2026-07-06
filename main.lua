@@ -306,6 +306,50 @@ local function build_blind_select()
     return out
 end
 
+-- Poker-hand levels (planet upgrades): which hands score biggest right now, so
+-- the advisor can pick the hand that actually clears the blind and value planets.
+local function build_hand_levels()
+    local out = newarray()
+    pcall(function()
+        if not (G.GAME and G.GAME.hands) then return end
+        for name, h in pairs(G.GAME.hands) do
+            if type(h) == 'table' and h.visible ~= false then
+                out[#out + 1] = {
+                    name = name,
+                    level = h.level or 1,
+                    chips = h.chips or 0,
+                    mult = h.mult or 0,
+                    played = h.played or 0,
+                }
+            end
+        end
+    end)
+    return out
+end
+
+-- Whole-deck composition (counts only), for flush/straight potential and build
+-- direction. Uses G.playing_cards (every playing card in the run).
+local function build_deck_summary()
+    local by_suit, by_rank, by_enh, by_ed, by_seal = {}, {}, {}, {}, {}
+    local total = 0
+    pcall(function()
+        local cards = G.playing_cards
+        if type(cards) ~= 'table' then return end
+        for _, c in ipairs(cards) do
+            total = total + 1
+            local suit = (c.base and c.base.suit) or '?'
+            local rank = (c.base and c.base.value) or '?'
+            by_suit[suit] = (by_suit[suit] or 0) + 1
+            by_rank[rank] = (by_rank[rank] or 0) + 1
+            local enh = get_enhancement(c); if enh ~= 'none' then by_enh[enh] = (by_enh[enh] or 0) + 1 end
+            local ed = get_edition(c);      if ed ~= 'none' then by_ed[ed] = (by_ed[ed] or 0) + 1 end
+            if c.seal then by_seal[c.seal] = (by_seal[c.seal] or 0) + 1 end
+        end
+    end)
+    return { total = total, by_suit = by_suit, by_rank = by_rank,
+             by_enhancement = by_enh, by_edition = by_ed, by_seal = by_seal }
+end
+
 local function build_state(request_id)
     local GAME = G.GAME
     local cr = GAME.current_round or {}
@@ -364,6 +408,8 @@ local function build_state(request_id)
     end
     state.jokers = jokers
     state.deck_size = (G.deck and G.deck.cards and #G.deck.cards) or 0
+    state.hand_levels = build_hand_levels()   -- planet-upgraded hand chips/mult
+    state.deck = build_deck_summary()          -- whole-deck composition (counts)
 
     -- Slot capacity: picking up a card when full forces selling/removing one,
     -- so the advisor can name which to drop instead of ignoring the tradeoff.
