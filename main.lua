@@ -127,6 +127,52 @@ local function desc_set(c, key)
     return nil
 end
 
+-- Recursively collect the resolved text strings out of a built card-UI table.
+local function harvest_text(t, acc)
+    if type(t) ~= 'table' then return end
+    if type(t.config) == 'table' and type(t.config.text) == 'string' then
+        acc[#acc + 1] = t.config.text
+    end
+    if type(t.nodes) == 'table' then
+        for _, ch in ipairs(t.nodes) do harvest_text(ch, acc) end
+    end
+    for _, ch in ipairs(t) do harvest_text(ch, acc) end
+end
+
+-- Card's ability text with REAL numbers filled in (Campfire "X3 Mult", Ride the
+-- Bus "+14 Mult", etc.) by reusing the game's own tooltip builder and harvesting
+-- the resolved strings. Falls back to the raw localization desc if that fails.
+local function resolved_desc(card, set, key)
+    local out = nil
+    pcall(function()
+        if type(card.generate_UIBox_ability_table) ~= 'function' then return end
+        local ui = card:generate_UIBox_ability_table()
+        if type(ui) ~= 'table' then return end
+        local acc = {}
+        harvest_text(ui.main, acc)
+        local s = table.concat(acc, ' '):gsub('%s+', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+        if s ~= '' then out = s end
+    end)
+    if out then return out end
+    return center_desc(set, key)
+end
+
+-- Live scalar values from a card's ability table (safety net if a desc ever
+-- comes back with unresolved #N# placeholders).
+local function ability_nums(card)
+    local out = {}
+    pcall(function()
+        local a = card.ability
+        if type(a) ~= 'table' then return end
+        for _, k in ipairs({ 'mult', 't_mult', 'x_mult', 'chips', 't_chips', 'h_size', 'd_size' }) do
+            if type(a[k]) == 'number' then out[k] = a[k] end
+        end
+        if type(a.extra) == 'number' then out.extra = a.extra end
+    end)
+    if next(out) then return out end
+    return nil
+end
+
 -- Describe one shop item (joker, playing card, consumable, voucher, or pack).
 local function shop_item(c)
     local item = {}
@@ -140,7 +186,8 @@ local function shop_item(c)
     end
     local ed = get_edition(c);      if ed ~= 'none' then item.edition = ed end
     local enh = get_enhancement(c); if enh ~= 'none' then item.enhancement = enh end
-    local ds = desc_set(c, item.key); if ds then item.desc = center_desc(ds, item.key) end
+    local ds = desc_set(c, item.key)
+    if ds then item.desc = resolved_desc(c, ds, item.key); item.nums = ability_nums(c) end
     return item
 end
 
@@ -193,7 +240,8 @@ local function collect_consumables()
                         or (c.config and c.config.center and c.config.center.name) or 'Unknown',
                     key = ckey,
                     set = cset,
-                    desc = center_desc(cset, ckey),
+                    desc = resolved_desc(c, cset, ckey),
+                    nums = ability_nums(c),
                 }
             end
         end
@@ -301,14 +349,16 @@ local function build_state(request_id)
     state.current_hand = hand
     local jokers = newarray()
     if G.jokers and G.jokers.cards then
-        for _, j in ipairs(G.jokers.cards) do
+        for i, j in ipairs(G.jokers.cards) do
             local jkey = (j.config and j.config.center and j.config.center.key) or '?'
             jokers[#jokers + 1] = {
+                slot = i,   -- left-to-right scoring order (slot 1 scores first)
                 name = (j.ability and j.ability.name)
                     or (j.config and j.config.center and j.config.center.name) or 'Unknown',
                 key = jkey,
                 edition = get_edition(j),
-                desc = center_desc('Joker', jkey),
+                desc = resolved_desc(j, 'Joker', jkey),
+                nums = ability_nums(j),
             }
         end
     end
