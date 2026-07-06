@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 # ------------------------------- config -------------------------------
-MODEL = "sonnet"          # "haiku" (fast) | "sonnet" (balanced) | "opus" (smartest)
+MODEL = "opus"          # "haiku" (fast) | "sonnet" (balanced) | "opus" (smartest)
 POLL_SECONDS = 0.3        # how often to check for a new request
 CLAUDE_TIMEOUT = 90       # seconds to wait for Claude per request
 MAX_WORDS_HINT = 55       # keep advice short enough for the overlay
