@@ -350,6 +350,24 @@ local function build_deck_summary()
              by_enhancement = by_enh, by_edition = by_ed, by_seal = by_seal }
 end
 
+-- Composition of the UNDRAWN draw pile (what you can still draw this round), so
+-- the advisor can judge whether cycling cards is worth it and what's reachable.
+local function build_remaining()
+    local by_suit, by_rank = {}, {}
+    local total = 0
+    pcall(function()
+        if not (G.deck and G.deck.cards) then return end
+        for _, c in ipairs(G.deck.cards) do
+            total = total + 1
+            local suit = (c.base and c.base.suit) or '?'
+            local rank = (c.base and c.base.value) or '?'
+            by_suit[suit] = (by_suit[suit] or 0) + 1
+            by_rank[rank] = (by_rank[rank] or 0) + 1
+        end
+    end)
+    return { total = total, by_suit = by_suit, by_rank = by_rank }
+end
+
 local function build_state(request_id)
     local GAME = G.GAME
     local cr = GAME.current_round or {}
@@ -410,6 +428,7 @@ local function build_state(request_id)
     state.deck_size = (G.deck and G.deck.cards and #G.deck.cards) or 0
     state.hand_levels = build_hand_levels()   -- planet-upgraded hand chips/mult
     state.deck = build_deck_summary()          -- whole-deck composition (counts)
+    state.deck_remaining = build_remaining()   -- undrawn draw-pile composition
 
     -- Slot capacity: picking up a card when full forces selling/removing one,
     -- so the advisor can name which to drop instead of ignoring the tradeoff.
