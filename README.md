@@ -11,8 +11,7 @@ API key and no per-request billing**.
 
 > Forked from [AbdelrahmanElmughrabi/Balatro-MCP-Server](https://github.com/AbdelrahmanElmughrabi/Balatro-MCP-Server).
 > The upstream project exported game state to JSON for Claude Desktop to read on demand.
-> This fork pivots it into a real-time, on-screen advisor. The original `balatro_mcp_server.py`
-> / `main.py` are kept for reference; the advisor does not use them.
+> This fork pivots it into a real-time, on-screen advisor.
 
 ## How it works
 
@@ -64,12 +63,12 @@ fallback for anything unmapped):
    ```
    (contains `main.lua` + `mcp_bridge.json`). Restart Balatro; you should see
    `[MCP Advisor] Loaded` in the console and "MCP Advisor" in the mods list.
-3. **Set up Python** (only needed for the optional legacy MCP server; the advisor brain
-   itself uses just the standard library):
+3. **Set up Python** — the brain uses only the standard library, but `start_advisor.bat`
+   runs it from a local venv:
    ```
    python -m venv .venv
-   .venv\Scripts\pip install mcp
    ```
+   (Or skip the venv and run `python mcp_brain.py` directly.)
 
 ## Use
 
@@ -97,6 +96,5 @@ The advice language follows Balatro's language setting automatically.
 
 ## License
 
-[MIT](LICENSE) © 2026 BebopSpikeSpiegel. Covers the advisor additions in this fork
-(`main.lua`, `mcp_brain.py`, the mod, launcher). Upstream files remain the original
-author's work.
+[MIT](LICENSE) © 2026 BebopSpikeSpiegel. This is a fork; see [Credits](#credits) for the
+upstream project it derives from.

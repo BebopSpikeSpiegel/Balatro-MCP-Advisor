@@ -128,6 +128,12 @@ local function resolve_context()
     local num, ctx = -1, 'other'
     pcall(function()
         num = G.STATE or -1
+        -- These overlays don't reliably set G.STATE (an open pack can report
+        -- G.STATE = 999), so detect them by the presence of their data/UI first.
+        if G.pack_cards and G.pack_cards.cards and #G.pack_cards.cards > 0 then
+            ctx = 'opening_booster'; return
+        end
+        if G.blind_select then ctx = 'blind_select'; return end
         local S = G.STATES
         if S then
             if num == S.SELECTING_HAND or num == S.HAND_PLAYED or num == S.DRAW_TO_HAND then
@@ -164,16 +170,17 @@ local function collect_consumables()
 end
 
 -- Booster pack currently open: the offered cards and how many may be chosen.
-local function build_booster(state_num)
+-- Pack kind is inferred from the choice cards' set (G.STATE is unreliable here).
+local function build_booster()
     local kind = 'Booster'
     pcall(function()
-        local S = G.STATES
-        if S then
-            if state_num == S.TAROT_PACK then kind = 'Arcana (Tarot cards)'
-            elseif state_num == S.PLANET_PACK then kind = 'Celestial (Planet cards)'
-            elseif state_num == S.SPECTRAL_PACK then kind = 'Spectral cards'
-            elseif state_num == S.STANDARD_PACK then kind = 'Standard (playing cards)'
-            elseif state_num == S.BUFFOON_PACK then kind = 'Buffoon (Jokers)' end
+        local first = G.pack_cards and G.pack_cards.cards and G.pack_cards.cards[1]
+        local set = first and first.ability and first.ability.set
+        if set == 'Planet' then kind = 'Celestial (Planet cards)'
+        elseif set == 'Tarot' then kind = 'Arcana (Tarot cards)'
+        elseif set == 'Spectral' then kind = 'Spectral cards'
+        elseif set == 'Joker' then kind = 'Buffoon (Jokers)'
+        elseif first and first.base then kind = 'Standard (playing cards)'
         end
     end)
     local pick_count, shown = 1, 0
@@ -302,7 +309,7 @@ local function build_state(request_id)
 
     -- Booster pack being opened: which card(s) to pick.
     if context == 'opening_booster' then
-        state.booster = build_booster(game_state)
+        state.booster = build_booster()
     end
 
     -- Blind selection: play vs skip.
