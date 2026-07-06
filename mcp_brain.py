@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -161,15 +162,19 @@ def sanitize(text: str) -> str:
     return text.strip()
 
 
+def build_prompt(state: dict) -> str:
+    return (SYSTEM + " " + task_instruction(state) + " " + language_instruction(state)
+            + "\n\nGame state JSON:\n" + json.dumps(state, ensure_ascii=False)
+            + "\n\nAdvice:")
+
+
 def ask_claude(state: dict) -> str:
-    prompt = (SYSTEM + " " + task_instruction(state) + " " + language_instruction(state)
-              + "\n\nGame state JSON:\n" + json.dumps(state, ensure_ascii=False)
-              + "\n\nAdvice:")
+    """Blocking call -- fallback used only when streaming produced nothing."""
     try:
         r = subprocess.run(
             # --strict-mcp-config with no --mcp-config => load no MCP servers,
             # so we don't pay to health-check every configured server per call.
-            [CLAUDE, "-p", prompt, "--model", MODEL, "--strict-mcp-config"],
+            [CLAUDE, "-p", build_prompt(state), "--model", MODEL, "--strict-mcp-config"],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -187,6 +192,65 @@ def ask_claude(state: dict) -> str:
         err = (r.stderr or "").strip()
         return "Claude returned nothing." + (f" ({err[:120]})" if err else "")
     return sanitize(out)
+
+
+def stream_claude(state: dict, on_partial) -> str:
+    """Stream Claude's reasoning + answer via stream-json, calling
+    on_partial(status, display_text) as tokens arrive so the overlay can show the
+    thinking live. Returns the final sanitized answer, or None if nothing came
+    (caller then falls back to the blocking ask_claude)."""
+    cmd = [CLAUDE, "-p", build_prompt(state), "--model", MODEL, "--strict-mcp-config",
+           "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
+    try:
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+            errors="replace", bufsize=1,
+        )
+    except FileNotFoundError:
+        return None
+    # Watchdog so a hung/slow call can't run past the timeout.
+    watchdog = threading.Timer(CLAUDE_TIMEOUT, lambda: proc.poll() is None and proc.kill())
+    watchdog.start()
+    thinking, answer, final = [], [], None
+    last_emit = 0.0
+    try:
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except Exception:
+                continue
+            etype = e.get("type")
+            if etype == "stream_event":
+                d = (e.get("event") or {}).get("delta") or {}
+                if d.get("type") == "thinking_delta":
+                    thinking.append(d.get("thinking") or "")
+                elif d.get("type") == "text_delta":
+                    answer.append(d.get("text") or "")
+            elif etype == "result":
+                final = e.get("result")
+            now = time.time()
+            if now - last_emit >= 0.25:
+                last_emit = now
+                if answer:                       # answer started -> show it streaming
+                    on_partial("THINKING", sanitize("".join(answer)))
+                else:                            # still reasoning -> show thinking only if we got text
+                    tail = sanitize("".join(thinking)[-360:])
+                    if tail:
+                        on_partial("THINKING", "[thinking] " + tail)
+    except Exception:
+        pass
+    finally:
+        watchdog.cancel()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
+    out = (final or "".join(answer)).strip()
+    return sanitize(out) if out else None
 
 
 def current_request_id():
@@ -225,9 +289,19 @@ def main():
                     print(f"[{time.strftime('%H:%M:%S')}] request {rid} "
                           f"({ncards} cards, {njok} jokers) -> asking {MODEL}...")
                     t0 = time.time()
-                    advice = ask_claude(data)
+
+                    def on_partial(status, text, _rid=rid):
+                        # Stream reasoning/answer to the overlay as it arrives.
+                        try:
+                            SUGGEST_PATH.write_text(f"{_rid}\n{status}\n{text}", encoding="utf-8")
+                        except Exception:
+                            pass
+
+                    advice = stream_claude(data, on_partial)
+                    if not advice:
+                        advice = ask_claude(data)   # fallback: blocking call
                     dt = time.time() - t0
-                    SUGGEST_PATH.write_text(f"{rid}\n{advice}", encoding="utf-8")
+                    SUGGEST_PATH.write_text(f"{rid}\nDONE\n{advice}", encoding="utf-8")
                     try:
                         with LOG_PATH.open("a", encoding="utf-8") as lf:
                             lf.write(json.dumps({

@@ -522,22 +522,29 @@ local function check_answer()
     if not info then return end
     local contents = love.filesystem.read('mcp-bridge/mcp_suggestion.json')
     if not contents or contents == '' then return end
-    local nl = contents:find('\n')
-    local rid, body
-    if nl then
-        rid = contents:sub(1, nl - 1)
-        body = contents:sub(nl + 1)
+    -- Format: "<id>\n<STATUS>\n<body>" (STATUS = THINKING while streaming, DONE when
+    -- final). Legacy "<id>\n<body>" is treated as DONE for backward compatibility.
+    local nl1 = contents:find('\n')
+    if not nl1 then return end
+    local rid = contents:sub(1, nl1 - 1):gsub('%s+$', '')
+    local rest = contents:sub(nl1 + 1)
+    local nl2 = rest:find('\n')
+    local first = nl2 and rest:sub(1, nl2 - 1) or rest
+    local status, body
+    if first == 'THINKING' or first == 'DONE' then
+        status = first
+        body = nl2 and rest:sub(nl2 + 1) or ''
     else
-        rid, body = contents, ''
+        status, body = 'DONE', rest
     end
-    rid = (rid or ''):gsub('%s+$', '')
-    -- Accept the answer even after the "slow" message showed: a late (e.g. opus)
-    -- reply should still appear on screen rather than being thrown away.
+    -- Update while thinking OR after the "slow" message; only DONE ends the wait.
     if mcpb.pending_id and rid == mcpb.pending_id
         and (mcpb.status == 'thinking' or mcpb.status == 'timeout') then
-        mcpb.status = 'ready'
         mcpb.text = body
-        print('[MCP Advisor] Answer received (' .. rid .. ')')
+        if status == 'DONE' then
+            mcpb.status = 'ready'
+            print('[MCP Advisor] Answer received (' .. rid .. ')')
+        end
     end
 end
 
@@ -606,8 +613,9 @@ end
 
 local function header_line()
     if mcpb.status == 'thinking' then
+        local secs = math.floor(love.timer.getTime() - mcpb.request_at)
         local dots = string.rep('.', 1 + (math.floor(love.timer.getTime() * 2) % 3))
-        return 'MCP Advisor  -  Analyzing' .. dots
+        return 'MCP Advisor  -  Thinking ' .. secs .. 's' .. dots
     elseif mcpb.status == 'ready' then
         return 'MCP Advisor  -  Advice'
     elseif mcpb.status == 'timeout' then
