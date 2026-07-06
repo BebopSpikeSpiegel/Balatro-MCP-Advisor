@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 # ------------------------------- config -------------------------------
-MODEL = "sonnet"        # "haiku" (fast) | "sonnet" (balanced) | "opus" (smartest)
+MODEL = os.getenv("MCP_MODEL", "sonnet")  # default sonnet; override via MCP_MODEL (start_advisor_*.bat)
 POLL_SECONDS = 0.3        # how often to check for a new request
 CLAUDE_TIMEOUT = 150      # seconds to wait for Claude per request (opus tail latency)
 MAX_WORDS_HINT = 55       # keep advice short enough for the overlay
